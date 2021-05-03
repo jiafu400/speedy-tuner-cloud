@@ -98,21 +98,17 @@ const Canvas = ({
   const areaWidth = canvas ? canvasWidth : 0;
   const areaHeight = canvas ? canvasHeight - 30 : 0; // leave some space in the bottom
   const lastIndex = data.length - 1;
-  const lastEntry = useMemo(() => data[lastIndex], [data, lastIndex]);
-  const maxTime = useMemo(() => (lastEntry.Time as number) / (zoom < 1 ? 1 : zoom), [lastEntry.Time, zoom]);
   const maxIndex = useMemo(() => lastIndex / (zoom < 1 ? 1 : zoom), [lastIndex, zoom]);
-  const timeScale = useMemo(() => areaWidth / maxTime, [areaWidth, maxTime]);
-  // const indexScale = areaWidth / maxIndex;
   const firstEntry = data[0];
-  const scaledWidth = useMemo(() => areaWidth * zoom / 1, [areaWidth, zoom]);
-  const startTime = pan;
+  const scaledWidth = useMemo(() => round(areaWidth * zoom / 1), [areaWidth, zoom]);
   const startIndex = useMemo(
-    () => startTime >= 0 ? 0 : -(startTime * maxIndex / areaWidth),
-    [areaWidth, maxIndex, startTime],
+    () => pan >= 0 ? 0 : -(pan * maxIndex / areaWidth),
+    [areaWidth, maxIndex, pan],
   );
   const pixelsOnScreen = (maxIndex - startIndex) / areaWidth;
   // map available pixels to the number of data entries
   const resolution = pixelsOnScreen < 1 ? 1 : Math.round(pixelsOnScreen);
+  // const resolution = 1;
 
   // find max values for each selected field so we can calculate scale
   const fieldsToPlot = useMemo(() => {
@@ -144,7 +140,6 @@ const Canvas = ({
   }, [data, selectedFields]);
 
   const fieldsKeys = useMemo(() => Object.keys(fieldsToPlot), [fieldsToPlot]);
-
   const dataWindow = useMemo(() => {
     const sliced = data.slice(startIndex, startIndex + maxIndex); // slice data
     // skip n-th element to reduce number of data points
@@ -154,11 +149,23 @@ const Canvas = ({
 
     return sliced;
   }, [data, maxIndex, resolution, startIndex]);
+  const lastEntry = useMemo(() => data[lastIndex], [data, lastIndex]);
+  // const maxTime = useMemo(() => (lastEntry.Time as number) / (zoom < 1 ? 1 : zoom), [lastEntry.Time, zoom]);
+  // const timeScale = useMemo(() => areaWidth / maxTime, [areaWidth, maxTime]);
+  // const panScaled = pan;
+  const indexScale = useMemo(
+    () => areaWidth / (dataWindow.length / (zoom < 1 ? 1 : zoom)),
+    [areaWidth, dataWindow.length, zoom],
+  );
+  const panScaled = 0;
+  // const startTime = ((dataWindow[startIndex] || {}).Time || 0) as number;
 
   const drawText = useCallback((left: number, top: number, text: string, color: string, textAlign = 'left') => {
     ctx.textAlign = textAlign as any;
+    // draw background
     ctx.fillStyle = Colors.BG;
     ctx.fillText(text, left + 2, top + 2);
+    // draw foreground
     ctx.fillStyle = color;
     ctx.fillText(text, left, top);
   }, [ctx]);
@@ -175,25 +182,28 @@ const Canvas = ({
   //   ctx.strokeStyle = prevStyle;
   // }, [canvasHeight, ctx]);
 
+  // TODO: replace plotField with plotFields - single loop for all fields
   const plotField = useCallback((field: string, min: number, max: number, color: string) => {
     ctx.strokeStyle = color;
     ctx.beginPath();
 
+    // TODO: move max and min to the global scope to use in indicator (position text over a line)
+
     // initial position
     const initialValue = areaHeight - remap(firstEntry[field] as number, min, max, 0, areaHeight);
-    ctx.moveTo(startTime, initialValue);
+    ctx.moveTo(pan, initialValue);
 
     dataWindow.forEach((entry, index) => {
       const lastRecord: LogEntry = dataWindow[index - 1] ?? { Time: 0 };
-      // scale time to max width
-      const time = (entry.Time ? entry.Time : lastRecord.Time) as number * timeScale;
+      // const time = (entry.Time ? entry.Time : lastRecord.Time) as number * timeScale;
+
       // scale the value
       const value = areaHeight - remap(entry[field] as number, min, max, 0, areaHeight);
-      const position = Math.round(startTime + time);
+      const position = round(index * indexScale);
 
       switch (entry.type) {
         case 'field':
-          ctx.lineTo(position, Math.round(value));
+          ctx.lineTo(position, round(value));
           break;
         case 'marker':
           drawText(position, areaHeight / 2, `Marker at: ${lastRecord.Time}`, Colors.GREEN);
@@ -202,10 +212,28 @@ const Canvas = ({
         default:
           break;
       }
+
+      if (index === 4) {
+        drawText(
+          100,
+          100,
+          `pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}`,
+          Colors.YELLOW,
+        );
+      }
+      if (index + 10 === dataWindow.length) {
+        drawText(
+          100,
+          150,
+          `pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}`,
+          Colors.RED,
+        );
+      }
+      // drawText(position, index * 8, `${index}`, Colors.WHITE);
     });
 
     ctx.stroke();
-  }, [areaHeight, ctx, dataWindow, drawText, firstEntry, startTime, timeScale]);
+  }, [areaHeight, areaWidth, ctx, dataWindow, drawText, firstEntry, indexScale, pan, pixelsOnScreen, scaledWidth, zoom]);
 
   const drawIndicator = useCallback(() => {
     ctx.setLineDash([5]);
@@ -214,15 +242,29 @@ const Canvas = ({
 
     // remap indicator position to index in the data array
     // FIXME: this is bad
-    let index = Math.floor(remap(indicatorPos, 0, areaWidth, startIndex, maxIndex));
-    if (index < 0) {
-      index = 0;
-    }
-
+    const index = indicatorPos < 0 ? 0 : round(remap(
+      indicatorPos,
+      0,
+      areaWidth,
+      0,
+      dataWindow.length - 1,
+    ));
+    // console.log('res', resolution);
     // TODO:
     // 1px = 1 index % resolution
-    // index = indicatorPos || 0;
-    const currentData = data[index];
+    // const index = indicatorPos < 0 ? 0 : indicatorPos;
+
+    let currentData = dataWindow[index];
+
+    if (!currentData) {
+      console.info('Out of bounds', index);
+      return;
+    }
+
+    if (currentData.type === 'marker') {
+      // take previous data point for markers
+      currentData = dataWindow[index - 1];
+    }
 
     ctx.moveTo(indicatorPos, 0);
 
@@ -271,7 +313,7 @@ const Canvas = ({
     ctx.lineTo(indicatorPos, canvasHeight);
     ctx.stroke();
     ctx.setLineDash([]);
-  }, [areaHeight, areaWidth, canvasHeight, ctx, data, drawText, fieldsKeys, fieldsToPlot, hsl, indicatorPos, maxIndex, startIndex]);
+  }, [areaHeight, areaWidth, canvasHeight, ctx, dataWindow, drawText, fieldsKeys, fieldsToPlot, hsl, indicatorPos]);
 
   const plot = useCallback(() => {
     if (!ctx) {
@@ -314,7 +356,7 @@ const Canvas = ({
           setPan(0);
           return 1;
         }
-        return current - e.deltaY / 100;
+        return current - e.deltaY / 1000;
       });
     }
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
