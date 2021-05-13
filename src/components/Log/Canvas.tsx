@@ -99,7 +99,6 @@ const Canvas = ({
   const areaHeight = canvas ? canvasHeight - 30 : 0; // leave some space in the bottom
   const lastIndex = data.length - 1;
   const maxIndex = useMemo(() => lastIndex / (zoom < 1 ? 1 : zoom), [lastIndex, zoom]);
-  const firstEntry = data[0];
   const scaledWidth = useMemo(() => round(areaWidth * zoom / 1), [areaWidth, zoom]);
   const startIndex = useMemo(
     () => pan >= 0 ? 0 : -(pan * maxIndex / areaWidth),
@@ -190,8 +189,8 @@ const Canvas = ({
     // TODO: move max and min to the global scope to use in indicator (position text over a line)
 
     // initial position
-    const initialValue = areaHeight - remap(firstEntry[field] as number, min, max, 0, areaHeight);
-    ctx.moveTo(pan, initialValue);
+    const initialValue = areaHeight - remap(dataWindow[0][field] as number, min, max, 0, areaHeight);
+    ctx.moveTo(0, initialValue);
 
     dataWindow.forEach((entry, index) => {
       const lastRecord: LogEntry = dataWindow[index - 1] ?? { Time: 0 };
@@ -229,11 +228,11 @@ const Canvas = ({
           Colors.RED,
         );
       }
-      // drawText(position, index * 8, `${index}`, Colors.WHITE);
+      // drawText(position, index * 15, `${index}`, Colors.WHITE);
     });
 
     ctx.stroke();
-  }, [areaHeight, areaWidth, ctx, dataWindow, drawText, firstEntry, indexScale, pan, pixelsOnScreen, scaledWidth, zoom]);
+  }, [areaHeight, areaWidth, ctx, dataWindow, drawText, indexScale, pan, pixelsOnScreen, scaledWidth, zoom]);
 
   const drawIndicator = useCallback(() => {
     ctx.setLineDash([5]);
