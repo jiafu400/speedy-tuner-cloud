@@ -123,7 +123,8 @@ const Kanvas = ({
   // );
 
   const onWheel = useCallback(({ evt }: { evt: WheelEvent }) => {
-    // on touch pad we have 2 axis, handle Y
+    // on touch pad we have 2 axis
+    // handle Y
     if (Math.abs(evt.deltaY) > Math.abs(evt.deltaX)) {
       setZoom((current) => {
         if (current < 1) {

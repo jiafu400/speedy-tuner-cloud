@@ -1,5 +1,3 @@
-/* eslint-disable no-bitwise */
-
 import {
   useCallback,
   useEffect,
@@ -91,6 +89,8 @@ const Canvas = ({
     return `hsl(${hue}, 90%, 50%)`;
   }, []);
 
+  const clamp = (val: number) => val < 1 ? 1 : val;
+
   const canvas = canvasRef.current!;
   const ctx = useMemo(() => canvas && canvas.getContext('2d', { alpha: true })!, [canvas]);
   const canvasWidth = canvas ? canvas.width : 0;
@@ -98,7 +98,7 @@ const Canvas = ({
   const areaWidth = canvas ? canvasWidth : 0;
   const areaHeight = canvas ? canvasHeight - 30 : 0; // leave some space in the bottom
   const lastIndex = data.length - 1;
-  const maxIndex = useMemo(() => lastIndex / (zoom < 1 ? 1 : zoom), [lastIndex, zoom]);
+  const maxIndex = useMemo(() => lastIndex / clamp(zoom), [lastIndex, zoom]);
   const scaledWidth = useMemo(() => round(areaWidth * zoom / 1), [areaWidth, zoom]);
   const startIndex = useMemo(
     () => pan >= 0 ? 0 : -(pan * maxIndex / areaWidth),
@@ -106,8 +106,8 @@ const Canvas = ({
   );
   const pixelsOnScreen = round((maxIndex - startIndex + 1) / areaWidth);
   // map available pixels to the number of data entries
-  // const resolution = pixelsOnScreen < 1 ? 1 : pixelsOnScreen;
-  const resolution = 1;
+  const resolution = clamp(pixelsOnScreen);
+  // const resolution = 1;
 
   // find max values for each selected field so we can calculate scale
   const fieldsToPlot = useMemo(() => {
@@ -149,11 +149,11 @@ const Canvas = ({
     return sliced;
   }, [data, maxIndex, resolution, startIndex]);
   const lastEntry = useMemo(() => data[lastIndex], [data, lastIndex]);
-  // const maxTime = useMemo(() => (lastEntry.Time as number) / (zoom < 1 ? 1 : zoom), [lastEntry.Time, zoom]);
+  // const maxTime = useMemo(() => (lastEntry.Time as number) / clamp(zoom), [lastEntry.Time, zoom]);
   // const timeScale = useMemo(() => areaWidth / maxTime, [areaWidth, maxTime]);
   // const panScaled = pan;
   const indexScale = useMemo(
-    () => areaWidth / (dataWindow.length / (zoom < 1 ? 1 : zoom)),
+    () => areaWidth / (dataWindow.length / clamp(zoom)),
     [areaWidth, dataWindow.length, zoom],
   );
   const panScaled = 0;
@@ -198,6 +198,8 @@ const Canvas = ({
 
       // scale the value
       const value = areaHeight - remap(entry[field] as number, min, max, 0, areaHeight);
+
+      // scale the position
       const position = round(index * indexScale);
 
       switch (entry.type) {
@@ -217,7 +219,7 @@ const Canvas = ({
         drawText(
           100,
           100,
-          `FIRST: pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale, 2)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}, windowLength: ${dataWindow.length}`,
+          `FIRST: pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale, 2)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}, windowLength: ${dataWindow.length}, right: ${rightBoundary}`,
           Colors.YELLOW,
         );
       }
@@ -233,7 +235,7 @@ const Canvas = ({
     });
 
     ctx.stroke();
-  }, [areaHeight, areaWidth, ctx, dataWindow, drawText, indexScale, pan, pixelsOnScreen, scaledWidth, zoom]);
+  }, [areaHeight, areaWidth, ctx, dataWindow, drawText, indexScale, pan, pixelsOnScreen, rightBoundary, scaledWidth, zoom]);
 
   const drawIndicator = useCallback(() => {
     ctx.setLineDash([5]);
@@ -320,7 +322,8 @@ const Canvas = ({
       return;
     }
 
-    setRightBoundary(-(scaledWidth - areaWidth));
+    // setRightBoundary(-(scaledWidth - areaWidth));
+    setRightBoundary(-2000);
 
     // basic settings
     ctx.font = '14px Arial';
@@ -329,10 +332,6 @@ const Canvas = ({
     if (zoom < 1) {
       setZoom(1);
       setPan(0);
-      return;
-    }
-
-    if (pan > leftBoundary || pan < rightBoundary) {
       return;
     }
 
@@ -347,9 +346,11 @@ const Canvas = ({
     );
 
     drawIndicator();
-  }, [ctx, scaledWidth, areaWidth, areaHeight, zoom, pan, rightBoundary, canvasWidth, canvasHeight, fieldsKeys, drawIndicator, plotField, fieldsToPlot, hsl]);
+  }, [ctx, scaledWidth, areaWidth, areaHeight, zoom, canvasWidth, canvasHeight, fieldsKeys, drawIndicator, plotField, fieldsToPlot, hsl]);
 
   const onWheel = useCallback((e: WheelEvent) => {
+    // on touchend we have 2 axis
+    // handle Y
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
       setZoom((current) => {
         if (current < 1) {
@@ -358,7 +359,12 @@ const Canvas = ({
         }
         return current - e.deltaY / 1000;
       });
+
+      // compensate - keep origin of zoom in the center
+      setPan((current) => current + e.deltaY);
     }
+
+    // handle X
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
       setPan((current) => checkPan(current, current - e.deltaX));
     }
