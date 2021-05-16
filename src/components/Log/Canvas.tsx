@@ -104,10 +104,10 @@ const Canvas = ({
     () => pan >= 0 ? 0 : -(pan * maxIndex / areaWidth),
     [areaWidth, maxIndex, pan],
   );
-  const pixelsOnScreen = (maxIndex - startIndex) / areaWidth;
+  const pixelsOnScreen = round((maxIndex - startIndex + 1) / areaWidth);
   // map available pixels to the number of data entries
-  const resolution = pixelsOnScreen < 1 ? 1 : Math.round(pixelsOnScreen);
-  // const resolution = 1;
+  // const resolution = pixelsOnScreen < 1 ? 1 : pixelsOnScreen;
+  const resolution = 1;
 
   // find max values for each selected field so we can calculate scale
   const fieldsToPlot = useMemo(() => {
@@ -193,7 +193,7 @@ const Canvas = ({
     ctx.moveTo(0, initialValue);
 
     dataWindow.forEach((entry, index) => {
-      const lastRecord: LogEntry = dataWindow[index - 1] ?? { Time: 0 };
+      // const lastRecord: LogEntry = dataWindow[index - 1] ?? { Time: 0 };
       // const time = (entry.Time ? entry.Time : lastRecord.Time) as number * timeScale;
 
       // scale the value
@@ -205,7 +205,8 @@ const Canvas = ({
           ctx.lineTo(position, round(value));
           break;
         case 'marker':
-          drawText(position, areaHeight / 2, `Marker at: ${lastRecord.Time}`, Colors.GREEN);
+          // TODO: this is drawn x times
+          // drawText(position, areaHeight / 2, `Marker at: ${lastRecord.Time}`, Colors.GREEN);
           // drawMarker(position); // TODO: fix moveTo
           break;
         default:
@@ -216,7 +217,7 @@ const Canvas = ({
         drawText(
           100,
           100,
-          `pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}`,
+          `FIRST: pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale, 2)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}, windowLength: ${dataWindow.length}`,
           Colors.YELLOW,
         );
       }
@@ -224,7 +225,7 @@ const Canvas = ({
         drawText(
           100,
           150,
-          `pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}`,
+          `LAST: pan: ${pan}, scaledWidth: ${scaledWidth}, index: ${index}, pos: ${position}, indexScale: ${round(indexScale, 2)}, panScaled: ${panScaled}, zoom: ${round(zoom)}, areaWidth: ${areaWidth}, pixels: ${pixelsOnScreen}, windowLength: ${dataWindow.length}`,
           Colors.RED,
         );
       }
@@ -348,7 +349,7 @@ const Canvas = ({
     drawIndicator();
   }, [ctx, scaledWidth, areaWidth, areaHeight, zoom, pan, rightBoundary, canvasWidth, canvasHeight, fieldsKeys, drawIndicator, plotField, fieldsToPlot, hsl]);
 
-  const onWheel = (e: WheelEvent) => {
+  const onWheel = useCallback((e: WheelEvent) => {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
       setZoom((current) => {
         if (current < 1) {
@@ -361,16 +362,16 @@ const Canvas = ({
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
       setPan((current) => checkPan(current, current - e.deltaX));
     }
-  };
+  }, [checkPan]);
 
-  const onMouseMove = (e: MouseEvent) => {
+  const onMouseMove = useCallback((e: MouseEvent) => {
     setIndicatorPos(e.nativeEvent.offsetX);
     if (isMouseDown) {
       setPan((current) => checkPan(current, current + e.movementX));
     }
-  };
+  }, [checkPan, isMouseDown]);
 
-  const onTouchMove = (e: TouchEvent) => {
+  const onTouchMove = useCallback((e: TouchEvent) => {
     const touch = e.touches[0];
     if (previousTouch) {
       (e as any).movementX = touch.pageX - previousTouch.pageX;
@@ -379,7 +380,7 @@ const Canvas = ({
     };
 
     setPreviousTouch(touch);
-  };
+  }, [checkPan, previousTouch]);
 
   const keyboardListener = useCallback((e: KeyboardEvent) => {
     if (isUp(e)) {
