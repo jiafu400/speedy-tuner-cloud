@@ -161,7 +161,7 @@ const Log = ({ ui, config }: { ui: UIState, config: Config }) => {
           }
         };
       } catch (error) {
-        setFetchError(error);
+        setFetchError(error as Error);
         throw error;
       }
     };
@@ -218,7 +218,7 @@ const Log = ({ ui, config }: { ui: UIState, config: Config }) => {
               <Canvas
                 data={logs!.records as LogEntry[]}
                 width={canvasWidth}
-                height={600}
+                height={750}
                 selectedFields={prepareSelectedFields}
               />
               :
